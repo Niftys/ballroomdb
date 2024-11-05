@@ -1,1 +1,1 @@
-SELECT * FROM Scores;
+SELECT * FROM judges;
