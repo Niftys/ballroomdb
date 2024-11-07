@@ -1,2 +1,3 @@
-INSERT INTO people (name) VALUES
-('Victoria Tatum & Cady Johnson');
+CREATE USER 'readonly'@'%' IDENTIFIED BY 'password';
+GRANT SELECT ON ballroomdb.* TO 'readonly'@'%';
+FLUSH PRIVILEGES;
