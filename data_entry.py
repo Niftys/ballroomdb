@@ -9,17 +9,20 @@ from webdriver_manager.chrome import ChromeDriverManager
 import tkinter as tk
 from tkinter import messagebox
 
+import config 
+
 # ----------------------------------------------------------------------------------
 #                      Connecting to MySQL and Fetching Dataset
 # ----------------------------------------------------------------------------------
 
 def create_connection():
+    """Establishes a connection to the MySQL database."""
     try:
         connection = mysql.connector.connect(
-            host="127.0.0.1",
-            user="root",
-            password="shusushi",
-            database="ballroomdb"
+            host=config.DB_HOST,
+            user=config.DB_USER,
+            password=config.DB_PASSWORD,
+            database=config.DB_NAME
         )
         if connection.is_connected():
             print("Connection successful")
@@ -253,7 +256,7 @@ def insert_scores(connection, values_list):
     finally:
         cursor.close()
         
-# ======================================================================
+# ===================================================================================
 
 def main():
     connection = create_connection()
