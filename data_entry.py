@@ -9,6 +9,10 @@ from webdriver_manager.chrome import ChromeDriverManager
 import tkinter as tk
 from tkinter import messagebox
 
+# ----------------------------------------------------------------------------------
+#                      Connecting to MySQL and Fetching Dataset
+# ----------------------------------------------------------------------------------
+
 def create_connection():
     try:
         connection = mysql.connector.connect(
@@ -32,24 +36,111 @@ def fetch_all_competition_names(connection):
     cursor.close()
     return [name[0] for name in results] if results else []
 
+def fetch_style_id(connection, style_name):
+    cursor = connection.cursor()
+    cursor.execute("SELECT id FROM Style WHERE name LIKE %s", (style_name,))
+    result = cursor.fetchone()
+    cursor.close()
+    return result[0] if result else None
+
+def fetch_competition_id(connection, competition_name):
+    cursor = connection.cursor()
+    cursor.execute("SELECT id FROM Comp WHERE name LIKE %s", (competition_name,))
+    result = cursor.fetchone()
+    cursor.close()
+    return result[0] if result else None
+
+def fetch_judge_id_mapping(connection):
+    cursor = connection.cursor()
+    cursor.execute("SELECT name, id FROM Judges")
+    results = cursor.fetchall()
+    cursor.close()
+    return {judge_name: judge_id for judge_name, judge_id in results}
+
+def fetch_people_id_mapping(connection):
+    cursor = connection.cursor()
+    cursor.execute("SELECT name, id FROM People")
+    results = cursor.fetchall()
+    cursor.close()
+    return {couple_name: people_id for couple_name, people_id in results}
+
+# ----------------------------------------------------------------------------------
+#                        User Entered Data, Data Collection
+# ----------------------------------------------------------------------------------
+
+def process_data(connection, url, competition_name, style_name):
+    # Scrape and process the data based on user inputs
+    output_filename = "E:/Desktop/Coding/Python/ballroomdb/competition_data.xlsx"
+    scrape_success = scrape_table_to_excel(url, output_filename)
+    if not scrape_success:
+        print("Failed to scrape data from the webpage.")
+        return
+
+    style_id = fetch_style_id(connection, style_name)
+    comp_id = fetch_competition_id(connection, competition_name)
+    if style_id is None or comp_id is None:
+        print("Style or competition not found in the database. Please verify the names.")
+        return
+
+    judge_id_map = fetch_judge_id_mapping(connection)
+    people_id_map = fetch_people_id_mapping(connection)
+
+    df = pd.read_excel(output_filename)
+    print("Excel data loaded successfully.")
+
+    df = df.loc[:, ~df.columns.str.contains("Number", case=False)]
+    judge_names = df.columns[2:]
+    judge_ids = []
+    missing_judges = []
+
+    for judge_name in judge_names:
+        judge_id = judge_id_map.get(judge_name)
+        if judge_id is None:
+            missing_judges.append(judge_name)
+        judge_ids.append(judge_id)
+
+    values_list = []
+    missing_couples = []
+    for _, row in df.iterrows():
+        couple_name = row['Couple']
+        people_id = people_id_map.get(couple_name)
+        if people_id is None:
+            missing_couples.append(couple_name)
+            continue
+
+        scores = row[2:].tolist()
+        for score, judge_id in zip(scores, judge_ids):
+            if pd.notna(score) and isinstance(score, (int, float)):
+                values_list.append((int(score), people_id, judge_id, style_id, comp_id))
+
+    insert_missing_entries(connection, missing_judges, missing_couples)
+    if not missing_judges and not missing_couples and values_list:
+        insert_scores(connection, values_list)
+    
+    print("Data entry completed.")
+
 def get_user_input(connection):
     def submit_form():
-        # Store user inputs in a dictionary
-        user_inputs["url"] = url_entry.get()
-        user_inputs["competition_name"] = competition_name_var.get()
-        user_inputs["style_name"] = style_name_entry.get()
+        # Get user input from the form
+        url = url_entry.get()
+        competition_name = competition_name_var.get()
+        style_name = style_name_entry.get()
 
-        if not user_inputs["url"] or not user_inputs["competition_name"] or not user_inputs["style_name"]:
+        if not url or not competition_name or not style_name:
             messagebox.showerror("Input Error", "All fields are required.")
             return
-        else:
-            root.destroy()  # Close the form window
-
-    user_inputs = {}
+        
+        # Process data without closing the form
+        process_data(connection, url, competition_name, style_name)
+        
+        # Clear fields for the next entry
+        url_entry.delete(0, tk.END)
+        style_name_entry.delete(0, tk.END)
+        competition_name_var.set(competition_names[0] if competition_names else '')
 
     root = tk.Tk()
     root.title("Competition Data Entry")
-    root.geometry("400x250")
+    root.geometry("400x300")
     root.resizable(False, False)
 
     tk.Label(root, text="Enter Competition Details", font=("Arial", 14)).pack(pady=10)
@@ -74,14 +165,10 @@ def get_user_input(connection):
     style_name_entry = tk.Entry(frame, width=40)
     style_name_entry.grid(row=2, column=1, padx=5, pady=5)
 
-    submit_button = tk.Button(root, text="Submit", command=submit_form, font=("Arial", 10), bg="black", fg="white")
-    submit_button.pack(pady=10)
+    submit_button = tk.Button(root, text="Submit", command=submit_form, font=("Arial", 20), bg="black", fg="white")
+    submit_button.pack(padx=30, pady=20)
 
     root.mainloop()
-    return user_inputs["url"], user_inputs["competition_name"], user_inputs["style_name"]
-
-# Rest of the code continues as before...
-
 
 def scrape_table_to_excel(url, output_filename='E:/Desktop/Coding/Python/ballroomdb/competition_data.xlsx'):
     options = webdriver.ChromeOptions()
@@ -113,33 +200,9 @@ def scrape_table_to_excel(url, output_filename='E:/Desktop/Coding/Python/ballroo
     driver.quit()
     return True
 
-def fetch_style_id(connection, style_name):
-    cursor = connection.cursor()
-    cursor.execute("SELECT id FROM Style WHERE name LIKE %s", (style_name,))
-    result = cursor.fetchone()
-    cursor.close()
-    return result[0] if result else None
-
-def fetch_competition_id(connection, competition_name):
-    cursor = connection.cursor()
-    cursor.execute("SELECT id FROM Comp WHERE name LIKE %s", (competition_name,))
-    result = cursor.fetchone()
-    cursor.close()
-    return result[0] if result else None
-
-def fetch_judge_id_mapping(connection):
-    cursor = connection.cursor()
-    cursor.execute("SELECT name, id FROM Judges")
-    results = cursor.fetchall()
-    cursor.close()
-    return {judge_name: judge_id for judge_name, judge_id in results}
-
-def fetch_people_id_mapping(connection):
-    cursor = connection.cursor()
-    cursor.execute("SELECT name, id FROM People")
-    results = cursor.fetchall()
-    cursor.close()
-    return {couple_name: people_id for couple_name, people_id in results}
+# ----------------------------------------------------------------------------------
+#                           Error Checking and Correction
+# ----------------------------------------------------------------------------------
 
 # Check for duplicate score entries
 def check_for_duplicates(connection, score, people_id, judge_id, style_id, comp_id):
@@ -160,6 +223,10 @@ def insert_missing_entries(connection, missing_judges, missing_couples):
 
     connection.commit()
     cursor.close()
+    
+# ----------------------------------------------------------------------------------
+#                        Exporting Data to MySQL Database
+# ----------------------------------------------------------------------------------
 
 def insert_scores(connection, values_list):
     cursor = connection.cursor()
@@ -185,67 +252,17 @@ def insert_scores(connection, values_list):
         print(f"Error inserting scores: {e}")
     finally:
         cursor.close()
+        
+# ======================================================================
 
 def main():
     connection = create_connection()
     if connection is None:
         print("Failed to connect to the database.")
         return
-
-    while True:
-        url, competition_name, style_name = get_user_input(connection)
-        if not url or not competition_name or not style_name:
-            print("URL, competition name, or style name not provided.")
-            return
-
-        output_filename = "E:/Desktop/Coding/Python/ballroomdb/competition_data.xlsx"
-        scrape_success = scrape_table_to_excel(url, output_filename)
-        if not scrape_success:
-            print("Failed to scrape data from the webpage.")
-            return
-
-        style_id = fetch_style_id(connection, style_name)
-        comp_id = fetch_competition_id(connection, competition_name)
-        if style_id is None or comp_id is None:
-            print("Style or competition not found in the database. Please verify the names.")
-            return
-
-        judge_id_map = fetch_judge_id_mapping(connection)
-        people_id_map = fetch_people_id_mapping(connection)
-
-        df = pd.read_excel(output_filename)
-        print("Excel data loaded successfully.")
-
-        df = df.loc[:, ~df.columns.str.contains("Number", case=False)]
-        judge_names = df.columns[2:]
-        judge_ids = []
-        missing_judges = []
-
-        for judge_name in judge_names:
-            judge_id = judge_id_map.get(judge_name)
-            if judge_id is None:
-                missing_judges.append(judge_name)
-            judge_ids.append(judge_id)
-
-        values_list = []
-        missing_couples = []
-        for _, row in df.iterrows():
-            couple_name = row['Couple']
-            people_id = people_id_map.get(couple_name)
-            if people_id is None:
-                missing_couples.append(couple_name)
-                continue
-
-            scores = row[2:].tolist()
-            for score, judge_id in zip(scores, judge_ids):
-                if pd.notna(score) and isinstance(score, (int, float)):
-                    values_list.append((int(score), people_id, judge_id, style_id, comp_id))
-
-        insert_missing_entries(connection, missing_judges, missing_couples)
-        if not missing_judges and not missing_couples and values_list:
-            insert_scores(connection, values_list)
-        
-        print("Data entry completed.")
+    
+    # Open the GUI form and keep it open for continuous entries
+    get_user_input(connection)
 
 if __name__ == "__main__":
     main()
