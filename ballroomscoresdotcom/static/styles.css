@@ -1,0 +1,509 @@
+/* Dark Mode Toggle Switch Styling */
+.dark-mode-toggle-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    z-index: 1000; /* Ensure the toggle switch is on top */
+}
+
+.dark-mode-toggle {
+    opacity: 0;
+    position: absolute;
+}
+
+.slider {
+    position: relative;
+    width: 50px;
+    height: 25px;
+    background-color: var(--slider-bg-light);
+    border-radius: 50px;
+    transition: background-color 0.3s ease;
+}
+
+.slider:before {
+    content: "";
+    position: absolute;
+    left: 4px;
+    top: 4px;
+    width: 17px;
+    height: 17px;
+    background-color: var(--slider-knob-light);
+    border-radius: 50%;
+    transition: transform 0.3s ease;
+}
+
+/* When the checkbox is checked (dark mode active) */
+.dark-mode-toggle:checked + .slider {
+    background-color: var(--slider-bg-dark);
+}
+
+.dark-mode-toggle:checked + .slider:before {
+    transform: translateX(25px);
+}
+
+/* ============================================= */
+/* Color Scheme Variables */
+/* ============================================= */
+
+:root {
+    /* Light Mode Variables */
+    --primary-color: #6272A4;
+    --secondary-color: #7581B0;
+    --text-color: #4A4E69;
+    --button-bg: #F0F0F0;
+    --button-text-color: #333;
+    --table-header-bg: #C5CAE9;
+    --table-row-bg: #ffffff;
+    --hover-background: #E3EAFD;
+    --slider-bg-light: #ccc;
+    --slider-knob-light: white;
+    --table-row-hover: #eee9f3;
+    --input-bg: #ffffff;
+    --input-border: #bfc0c0;
+    --table-border: #ddd;
+    --table-cell-bg: #fff;
+    --text-shadow: rgba(74, 78, 105, 0.2);
+    --select-background: #eee9f3;
+    --gradient: linear-gradient(135deg, #E3EAFD, #E6E6FA, #D8DEE9);
+    --scrollbar-track: #f1f1f1;
+    --scrollbar-thumb: #888;
+    --scrollbar-thumb-hover: #555;
+}
+
+.dark-mode {
+    /* Dark Mode Variables */
+    --primary-color: #9b59b6; /* Purple */
+    --secondary-color: #6a3d92; /* Darker purple */
+    --text-color: #e0e0e0;
+    --button-bg: #333;
+    --button-text-color: #f5f5f5;
+    --table-header-bg: #2A2A2A;
+    --table-row-bg: #333;
+    --hover-background: #444;
+    --slider-bg-dark: #500d58;
+    --slider-knob-dark: #f5f5f5;
+    --table-row-hover: #444;
+    --input-bg: #444;
+    --input-border: #555;
+    --table-border: #444;
+    --table-cell-bg: #333;
+    --text-shadow: rgba(255, 255, 255, 0.2);
+    --select-background: #555;
+    --gradient: linear-gradient(135deg, #3e1c5e, #1a0c3e);
+    --scrollbar-track: #222;
+    --scrollbar-thumb: #555;
+    --scrollbar-thumb-hover: #333;
+}
+
+/* General Page Styles */
+body {
+    background: var(--gradient);
+    background-color: var(--gradient);
+    color: var(--text-color);
+    font-family: Arial, sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+/* Buttons */
+button {
+    background-color: var(--button-bg);
+    color: var(--button-text-color);
+    border: 1px solid var(--input-border);
+    border-radius: 6px;
+    padding: 10px 15px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+button:hover {
+    background-color: var(--hover-background);
+}
+
+/* Table Styles */
+table th {
+    background-color: var(--table-header-bg);
+    color: var(--text-color);
+    padding: 10px;
+    text-align: center;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+table tr:nth-child(even) {
+    background-color: var(--table-row-bg);
+}
+
+table th, table td {
+    padding: 10px;
+    border: 1px solid var(--table-border);
+    text-align: center;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+table tr:hover {
+    background-color: var(--table-row-hover);
+}
+
+/* ============================================= */
+/* Base Styles and Layout */
+/* ============================================= */
+
+/* Main Container */
+.container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+    max-width: 1500px;
+    width: 100%;
+}
+
+/* Page Title */
+h1 {
+    color: var(--text-color);
+    margin-bottom: 15px;
+    text-shadow: var(--text-shadow);
+    font-family: "Limelight", sans-serif;
+    font-weight: 400;
+    font-style: normal;
+    font-size: 3em;
+    text-align: center;
+}
+
+/* ============================================= */
+/* Competition Select Section */
+/* ============================================= */
+
+/* Competition Select Container */
+.competition-container {
+    color: var(--select-background);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 20px;
+    padding: 10px;
+    border-radius: 5px;
+}
+
+/* Competition Select Dropdown */
+#competitionSelect {
+    width: 30%;
+    padding: 10px;
+    font-size: 15px;
+    border-radius: 6px;
+    border: 1px solid var(--input-border);
+    color: var(--text-color);
+    background-color: var(--input-bg); /* Change to variable */
+    box-sizing: border-box;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Select All Button */
+.select-all-button {
+    margin-top: 10px;
+    padding: 8px 12px;
+    font-size: 14px;
+    background-color: var(--secondary-color);
+    color: #f5f5f5;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+/* ============================================= */
+/* Search Section */
+/* ============================================= */
+
+/* Search Container Layout */
+.search-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    border-radius: 5px;
+    padding: 10px;
+    flex-wrap: wrap;
+}
+
+.input-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    max-width: 250px;
+}
+
+/* Input Fields */
+input[type="text"] {
+    font-size: 15px;
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid var(--input-border);
+    color: var(--text-color);
+    background-color: var(--input-bg);
+    width: 100%;
+    box-sizing: border-box;
+    height: 42px;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+input[type="text"]:focus,
+select:focus {
+    outline: none;
+    background-color: var(--select-background);
+    border-color: var(--text-color);
+}
+
+/* Search Button */
+#searchButton {
+    font-size: 15px;
+    color: #f5f5f5;
+    background-color: var(--primary-color);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    padding: 10px 20px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 100px;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ============================================= */
+/* Suggestions Dropdown */
+/* ============================================= */
+
+/* Container for the autocomplete items */
+.autocomplete-items {
+    position: absolute;
+    border: 1px solid var(--input-border);
+    border-bottom: none;
+    border-top: none;
+    z-index: 99;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background-color: var(--table-row-bg); /* Adjust based on theme */
+    max-height: 200px; /* Set a max height for the dropdown */
+    overflow-y: auto; /* Enable vertical scrolling when content exceeds max height */
+}
+
+/* Style each item in the dropdown */
+.autocomplete-items div {
+    padding: 10px;
+    cursor: pointer;
+    background-color: var(--table-row-bg);
+    border-bottom: 1px solid var(--input-border);
+}
+
+/* Style the active item */
+.autocomplete-items div.autocomplete-active {
+    background-color: var(--primary-color);
+    color: var(--input-bg);
+}
+
+/* Optional scrollbar styling (for modern browsers) */
+.autocomplete-items::-webkit-scrollbar {
+    width: 8px; /* Adjust width as needed */
+}
+
+.autocomplete-items::-webkit-scrollbar-thumb {
+    background-color: var(--primary-color); /* Color of scrollbar thumb */
+    border-radius: 4px; /* Rounded corners for scrollbar thumb */
+}
+
+.autocomplete-items li:hover {
+    background-color: var(--hover-background);
+}
+
+/* ============================================= */
+/* Results Table Styling */
+/* ============================================= */
+
+.results-table-container {
+    max-height: 400px;
+    overflow-y: auto;
+    overflow-x: auto; /* Enable horizontal scrolling */
+    width: 100%;
+    margin-top: 25px;
+    padding: 0 10px; /* Add some padding for better alignment */
+    box-sizing: border-box;
+}
+
+.results-table {
+    width: 100%;
+    min-width: 600px; /* Set a minimum width to ensure readability */
+    border-collapse: collapse;
+    color: var(--text-color);
+    border-radius: 8px;
+    background-color: var(--table-row-bg);
+    box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.results-table thead th {
+    background-color: var(--table-header-bg);
+    font-weight: bold;
+    text-align: center;
+    cursor: pointer;
+}
+
+.results-table th,
+.results-table td {
+    padding: 10px;
+    border: 1px solid var(--table-border);
+    text-align: center;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.results-table th {
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.results-table tr:hover {
+    background-color: var(--hover-background);
+}
+
+/* ============================================= */
+/* Scrollbar */
+/* ============================================= */
+
+/* Targeting the entire scrollbar */
+::-webkit-scrollbar {
+    width: 12px;  /* Adjust the width of the scrollbar */
+    height: 12px; /* For horizontal scrollbar */
+}
+
+/* Styling the scrollbar track (the background of the scrollbar) */
+::-webkit-scrollbar-track {
+    background-color: var(--scrollbar-track);  /* Light gray background */
+    border-radius: 10px;  /* Round corners */
+}
+
+/* Styling the scrollbar thumb (the draggable part of the scrollbar) */
+::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);  /* Darker gray color */
+    border-radius: 10px;  /* Round corners */
+    transition: background-color 0.3s ease;
+}
+
+/* Styling the scrollbar thumb on hover */
+::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover);  /* Darker color when hovered */
+}
+
+/* Firefox scrollbar */
+body {
+    scrollbar-width: thin;
+    scroll-behavior: smooth;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+/* Styles for expandable details row */
+.details-row {
+    display: none; /* Start hidden */
+    background-color: var(--table-row-bg);
+    transition: max-height 0.3s ease;
+}
+
+.details-row td {
+    padding: 0;
+}
+
+.judge-ratings-table {
+    width: 100%; /* Full width of the parent cell */
+    table-layout: fixed; /* Enforce even column distribution within available width */
+    border-collapse: collapse;
+}
+
+.judge-ratings-table th, .judge-ratings-table td {
+    padding: 8px;
+    border: 1px solid var(--table-border);
+    text-align: center;
+    overflow: hidden; /* Hide any overflow content */
+    white-space: nowrap; /* Prevent text from wrapping, but can be removed if wrapping is okay */
+    text-overflow: ellipsis; /* Adds ellipsis for overflowing text */
+}
+
+/* ============================================= */
+/* Mobile Display */
+/* ============================================= */
+
+@media (max-width: 768px) {
+    /* Enable horizontal scrolling for tables */
+    .results-table-container {
+        overflow-x: auto; /* Allow horizontal scrolling */
+        -webkit-overflow-scrolling: touch; /* Smooth scrolling for touch devices */
+        width: 100%; /* Ensure container takes full width */
+    }
+
+    table {
+        min-width: 600px; /* Ensure table has enough width for columns */
+        border-collapse: collapse; /* Clean appearance */
+        width: 100%; /* Fit container width */
+    }
+
+    th, td {
+        padding: 10px; /* Add padding for readability */
+        text-align: center; /* Center-align content */
+        border: 1px solid var(--table-border); /* Consistent borders */
+    }
+
+    th {
+        background-color: var(--table-header-bg); /* Highlight header */
+        font-weight: bold; /* Make header text prominent */
+    }
+
+    tr {
+        border-bottom: 1px solid var(--table-border); /* Separate rows */
+    }
+
+    /* Competition Selection Dropdown */
+    .competition-container {
+        width: 100%; /* Full width on mobile */
+        font-size: 1.1em; /* Adjust font size */
+        padding: 12px; /* Comfortable padding */
+        margin-bottom: 20px; /* Space below */
+        box-sizing: border-box; /* Include padding in width */
+    }
+
+    #competitionSelect {
+        width: 100%; /* Full width dropdown */
+        padding: 12px; /* Comfortable touch targets */
+        font-size: 1em; /* Readable font size */
+        border-radius: 6px; /* Smooth rounded corners */
+        border: 1px solid var(--input-border); /* Consistent styling */
+        background-color: var(--input-bg); /* Match theme */
+    }
+
+    /* Select All Button */
+    .select-all-button {
+        width: 100%; /* Full width button */
+        font-size: 1em; /* Font size matching input */
+        padding: 10px; /* Comfortable touch size */
+        margin-top: 10px; /* Space above */
+        border-radius: 6px; /* Smooth rounded corners */
+        background-color: var(--button-bg); /* Match button theme */
+        color: var(--button-text-color); /* Ensure readability */
+        transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    .select-all-button:hover {
+        background-color: var(--hover-background); /* Add hover effect */
+    }
+}

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="preload" href="styles.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="styles.css"></noscript>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Simple, lightweight ballroom competition results finder. Search and compare ranking between competitions, judges, and more.">
+    <title>Ballroom Score Finder</title>
+    <link rel="icon" href="/favicon/favicon.ico" type="image/x-icon">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Limelight&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Dark Mode Toggle Switch -->
+    <label for="darkModeToggle" class="dark-mode-toggle-container">
+        <input type="checkbox" id="darkModeToggle" class="dark-mode-toggle">
+        <span class="slider"></span>
+    </label>
+
+    <div class="container">
+        <h1>Ballroom Score Finder</h1>
+
+        <!-- Competition Select Container -->
+        <div class="competition-container">
+            <select id="competitionSelect" multiple></select>
+            <button type="button" id="selectAllButton" class="select-all-button">Select All (not recommended)</button>
+        </div>
+
+        <!-- Search Fields Container -->
+        <div class="search-container">
+            <div class="input-container">
+                <input type="text" id="competitorNameInput" placeholder="Enter Name or Couple">
+                <div id="competitorNameInputautocomplete-list" class="autocomplete-items"></div>
+            </div>            
+            
+            <div class="input-container">
+                <input type="text" id="styleInput" placeholder="Select Style">
+                <div id="styleInputautocomplete-list" class="autocomplete-items"></div>
+            </div>
+
+            <div class="input-container">
+                <input type="text" id="scoreInput" placeholder="Enter Score">
+            </div>
+
+            <div class="input-container">
+                <input type="text" id="judgeNameInput" placeholder="Select Judge">
+                <div id="judgeNameInputautocomplete-list" class="autocomplete-items"></div>
+            </div>
+
+            <button type="button" id="searchButton" onclick="searchDatabase()">Search</button>
+        </div>
+        
+        <!-- Results Table -->
+        <div class="results-table-container">
+            <table class="results-table">
+                <thead>
+                    <tr>
+                        <th>Placement</th>
+                        <th>Competitor</th>
+                        <th>Style</th>
+                        <th>Competition</th>
+                        <th>Judge</th>
+                    </tr>
+                </thead>
+                <tbody id="results"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="autocomplete.js"></script>
+    <script src="search.js"></script>
+    <script>
+        // Wait for the DOM content to be fully loaded before adding event listeners
+        document.addEventListener("DOMContentLoaded", function () {
+            // Function to toggle dark mode
+            function toggleDarkMode() {
+                // Toggle the 'dark-mode' class on the body
+                document.body.classList.toggle('dark-mode');
+    
+                // Save the current theme to localStorage
+                if (document.body.classList.contains('dark-mode')) {
+                    localStorage.setItem('theme', 'dark');
+                } else {
+                    localStorage.setItem('theme', 'light');
+                }
+            }
+
+            // Set up event listener on the dark mode toggle switch
+            const darkModeToggle = document.getElementById('darkModeToggle');
+            darkModeToggle.addEventListener('change', toggleDarkMode);
+
+            // Check localStorage for a saved theme on page load
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark') {
+                document.body.classList.add('dark-mode');
+                darkModeToggle.checked = true; // Ensure the toggle switch is in the "on" state
+            }
+        });
+    </script>    
+</body>
+</html>
