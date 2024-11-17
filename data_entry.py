@@ -1,3 +1,4 @@
+import re
 import time
 import mysql.connector
 from mysql.connector import Error
@@ -6,20 +7,39 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
-import tkinter as tk
-from tkinter import messagebox
+from urllib.parse import urlparse, parse_qs
+import config
 
-import config 
+# ----------------------------------------------------------------------------------
+#                     Configurable Main URL and Competition Name
+# ----------------------------------------------------------------------------------
+
+MAIN_COMPETITION_URL = "https://ballroomcompexpress.com/results.php?cid=131"  # Enter main competition URL here
+COMPETITION_NAME = "Triangle Open DanceSport Competition 2024"  # Enter the competition name and year here
+
+# ----------------------------------------------------------------------------------
+#                      Extract CID from URL
+# ----------------------------------------------------------------------------------
+    # Extracts the 'cid' parameter from the URL
+def extract_cid_from_url(url):
+    query_params = parse_qs(urlparse(url).query)
+    cid = query_params.get('cid', [None])[0]
+    if cid:
+        print(f"Extracted cid: {cid}")
+    else:
+        print("No 'cid' parameter found in the URL.")
+    return cid
+
+CID = extract_cid_from_url(MAIN_COMPETITION_URL)
 
 # ----------------------------------------------------------------------------------
 #                      Connecting to MySQL and Fetching Dataset
 # ----------------------------------------------------------------------------------
-
+    # Establishes a connection to the MySQL database
 def create_connection():
-    """Establishes a connection to the MySQL database."""
     try:
         connection = mysql.connector.connect(
-            host=config.DB_HOST,
+            host=config.DB_HOST, # Top Secret information
             user=config.DB_USER,
             password=config.DB_PASSWORD,
             database=config.DB_NAME
@@ -31,279 +51,46 @@ def create_connection():
         print("Error connecting to MySQL", e)
         return None
 
-def fetch_all_competition_names(connection):
-    query = "SELECT name FROM comp"
-    cursor = connection.cursor(buffered=True)
-    cursor.execute(query)
-    results = cursor.fetchall()
-    cursor.close()
-    return [name[0] for name in results] if results else []
-
-def fetch_style_id(connection, style_name):
-    cursor = connection.cursor()
-    cursor.execute("SELECT id FROM style WHERE name LIKE %s", (style_name,))
-    result = cursor.fetchone()
-    cursor.close()
-    return result[0] if result else None
-
-def fetch_competition_id(connection, competition_name):
-    cursor = connection.cursor()
-    cursor.execute("SELECT id FROM comp WHERE name LIKE %s", (competition_name,))
-    result = cursor.fetchone()
-    cursor.close()
-    return result[0] if result else None
-
-def fetch_judge_id_mapping(connection):
-    cursor = connection.cursor()
+    # Fetches all necessary mappings in one go for efficiency
+def fetch_data_mappings(connection):
+    mappings = {}
+    cursor = connection.cursor(dictionary=True)
+    
+    # Fetch all mappings in a single query per table
     cursor.execute("SELECT name, id FROM judges")
-    results = cursor.fetchall()
-    cursor.close()
-    return {judge_name: judge_id for judge_name, judge_id in results}
-
-def fetch_people_id_mapping(connection):
-    cursor = connection.cursor()
+    mappings['judges'] = {row['name']: row['id'] for row in cursor.fetchall()}
+    
     cursor.execute("SELECT name, id FROM people")
-    results = cursor.fetchall()
+    mappings['people'] = {row['name']: row['id'] for row in cursor.fetchall()}
+    
+    cursor.execute("SELECT name, id FROM style")
+    mappings['styles'] = {row['name']: row['id'] for row in cursor.fetchall()}
+
     cursor.close()
-    return {couple_name: people_id for couple_name, people_id in results}
+    return mappings
 
-# ----------------------------------------------------------------------------------
-#                        User Entered Data, Data Collection
-# ----------------------------------------------------------------------------------
-def get_event_links(main_url):
-    """Scrapes the main competition URL to gather all event links."""
-    options = webdriver.ChromeOptions()
-    options.add_argument("--headless")
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-
-    driver.get(main_url)
-    time.sleep(3)  # Wait for page to load
-
-    event_links = []
-    try:
-        # Find all event-specific links on the main competition page
-        link_elements = driver.find_elements(By.CSS_SELECTOR, "a")  # Adjust selector as needed based on HTML structure
-        for element in link_elements:
-            href = element.get_attribute("href")
-            # Only add links that match the event-specific URL pattern
-            if href and "results.php?cid=120&eid=" in href:
-                event_links.append(href)
-        print(f"Found {len(event_links)} event links.")
-        
-    except Exception as e:
-        print("Error finding event links:", e)
-    
-    driver.quit()
-    return event_links
-
-def process_all_events(connection, main_url, competition_name):
-    """Processes each event link found on the main competition page."""
-    event_links = get_event_links(main_url)
-    if not event_links:
-        print("No event links found.")
-        return
-
-    # Process each event link individually
-    for event_url in event_links:
-        print(f"Processing event: {event_url}")
-        process_data(connection, event_url, competition_name)
-    print("Completed processing all events.")
-
-def process_data(connection, url, competition_name):
-    """Scrapes and processes data from a single event URL."""
-    output_filename = config.OUTPUT_FILE
-    style_name = scrape_table_to_excel(url, output_filename)
-    if not style_name:
-        print(f"Failed to scrape data from the webpage: {url}")
-        return
-
-    # Check if the style exists in the database, or add it if missing
-    style_id = fetch_style_id(connection, style_name)
-    if style_id is None:
-        style_id = insert_missing_style(connection, style_name)
-
-    # Set comp_id directly to 4
-    comp_id = 4
-    print(f"Using comp_id = {comp_id} for all entries.")
-
-    # Fetch mappings for judges and couples
-    judge_id_map = fetch_judge_id_mapping(connection)
-    people_id_map = fetch_people_id_mapping(connection)
-
-    # Load Excel data into DataFrame for processing
-    df = pd.read_excel(output_filename)
-    print("Excel data loaded successfully.")
-
-    df = df.loc[:, ~df.columns.str.contains("Number", case=False)]
-    judge_names = df.columns[2:]
-    judge_ids = []
-    missing_judges = []
-
-    for judge_name in judge_names:
-        judge_id = judge_id_map.get(judge_name)
-        if judge_id is None:
-            missing_judges.append(judge_name)
-        judge_ids.append(judge_id)
-
-    values_list = []
-    missing_couples = []
-    for _, row in df.iterrows():
-        couple_name = row['Couple']
-        people_id = people_id_map.get(couple_name)
-        if people_id is None:
-            missing_couples.append(couple_name)
-            continue
-
-        scores = row[2:].tolist()
-        for score, judge_id in zip(scores, judge_ids):
-            if pd.notna(score) and isinstance(score, (int, float)):
-                values_list.append((int(score), people_id, judge_id, style_id, comp_id))
-
-    # Automatically insert missing entries (judges and couples) if found
-    if missing_judges or missing_couples:
-        print("Adding missing entries to database...")
-        insert_missing_entries(connection, missing_judges, missing_couples)
-        print("Missing entries added successfully.")
-
-        # Refresh judge and people mappings after insertion
-        judge_id_map = fetch_judge_id_mapping(connection)
-        people_id_map = fetch_people_id_mapping(connection)
-
-        # Re-assign judge_ids after adding missing entries
-        judge_ids = [judge_id_map.get(judge_name) for judge_name in judge_names]
-
-        # Update people_ids for missing couples
-        for _, row in df.iterrows():
-            couple_name = row['Couple']
-            if couple_name in missing_couples:
-                people_id = people_id_map.get(couple_name)
-                scores = row[2:].tolist()
-                for score, judge_id in zip(scores, judge_ids):
-                    if pd.notna(score) and isinstance(score, (int, float)):
-                        values_list.append((int(score), people_id, judge_id, style_id, comp_id))
-
-    # Insert scores after adding any missing entries
-    if values_list:
-        insert_scores(connection, values_list)
-    
-    print("Data entry completed for event.")
-
-def get_user_input(connection):
-    def submit_form():
-        # Get user input from the form
-        url = url_entry.get()
-        competition_name = competition_name_var.get()
-
-        if not url or not competition_name:
-            messagebox.showerror("Input Error", "All fields are required.")
-            return
-        
-        # Process data without closing the form
-        process_data(connection, url, competition_name)
-        
-        # Clear fields for the next entry
-        url_entry.delete(0, tk.END)
-        competition_name_var.set(competition_names[0] if competition_names else '')
-
-    # Window formatting
-    root = tk.Tk()
-    root.title("Competition Data Entry")
-    root.geometry("400x300")
-    root.resizable(False, False)
-
-    tk.Label(root, text="Enter Competition Details", font=("Arial", 14)).pack(pady=10)
-    frame = tk.Frame(root)
-    frame.pack(pady=10)
-
-    tk.Label(frame, text="URL:", font=("Arial", 10)).grid(row=0, column=0, sticky="e", padx=5, pady=5)
-    url_entry = tk.Entry(frame, width=40)
-    url_entry.grid(row=0, column=1, padx=5, pady=5)
-
-    tk.Label(frame, text="Competition Name:", font=("Arial", 10)).grid(row=3, column=0, sticky="e", padx=5, pady=5)
-    competition_name_var = tk.StringVar(root)
-    competition_names = fetch_all_competition_names(connection)
-    if competition_names:
-        competition_name_var.set(competition_names[0])
-
-    competition_dropdown = tk.OptionMenu(frame, competition_name_var, *competition_names)
-    competition_dropdown.config(width=35)
-    competition_dropdown.grid(row=1, column=1, padx=5, pady=5)
-
-    submit_button = tk.Button(root, text="Submit", command=submit_form, font=("Arial", 20), bg="black", fg="white")
-    submit_button.pack(padx=30, pady=20)
-
-    root.mainloop()
-
-def scrape_table_to_excel(url, output_filename=config.OUTPUT_FILE):
-    # Configure headless browser options
-    options = webdriver.ChromeOptions()
-    options.add_argument("--headless")
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-
-    # Access the URL
-    driver.get(url)
-    time.sleep(5)  # Wait for the page to load
-
-    # Attempt to locate the header element and extract the style name
-    style_name = None
-    try:
-        # Use the full CSS path to find the <h1> header element
-        header_element = driver.find_element(By.CSS_SELECTOR, "html body div#all-wrapper div.main-wrapper div.main-content h1")
-        header_text = header_element.text
-        print(f"Original header: {header_text}")
-        
-        # Remove "Results for" and "Amateur Collegiate" from the header text
-        style_name = header_text.replace("Results for", "").replace("Amateur Collegiate", "").strip()
-        print(f"Extracted Style Name: {style_name}")
-        
-    except Exception as e:
-        print("Could not find header in specified path:", e)
-        driver.quit()
-        return None  # Exit if header is not found
-
-    # Locate the table on the page
-    try:
-        table = driver.find_element(By.XPATH, "//div[@id='results']//table")
-    except Exception as e:
-        print("No table found in the HTML.")
-        driver.quit()
-        return None  # Exit if table is not found
-
-    # Extract table headers and rows
-    headers = [header.text for header in table.find_elements(By.TAG_NAME, "th")]
-    rows = table.find_elements(By.TAG_NAME, "tr")
-    data = []
-    for row in rows:
-        cells = row.find_elements(By.TAG_NAME, "td")
-        row_data = [cell.text for cell in cells]
-        data.append(row_data)
-
-    # Create DataFrame from the table data (no 'Style' column)
-    df = pd.DataFrame(data, columns=headers)
-
-    # Save to Excel without the 'Style' column
-    df.to_excel(output_filename, index=False)
-    print(f"Data scraped and saved to {output_filename}")
-
-    driver.quit()
-    return style_name  # Return the cleaned style name for further processing
-
-# ----------------------------------------------------------------------------------
-#                           Error Checking and Correction
-# ----------------------------------------------------------------------------------
-
-# Check for duplicate score entries
-def check_for_duplicates(connection, score, people_id, judge_id, style_id, comp_id):
+    #Fetches the competition ID if it exists; otherwise, adds the competition and returns the new ID
+def get_or_create_competition_id(connection, competition_name):
     cursor = connection.cursor()
-    query = """
-        SELECT 1 FROM scores
-        WHERE score = %s AND people_id = %s AND judge_id = %s AND style_id = %s AND comp_id = %s
-    """
-    cursor.execute(query, (score, people_id, judge_id, style_id, comp_id))
+    
+    # Check if the competition exists
+    cursor.execute("SELECT id FROM comp WHERE name = %s", (competition_name,))
     result = cursor.fetchone()
-    cursor.close()
-    return result is not None  # True if duplicate exists
+    
+    if result:
+        comp_id = result[0]
+        print(f"Competition '{competition_name}' found with comp_id = {comp_id}.")
+    else:
+        # Insert new competition
+        cursor.execute("INSERT INTO comp (name) VALUES (%s)", (competition_name,))
+        connection.commit()
+        comp_id = cursor.lastrowid
+        print(f"Competition '{competition_name}' added with new comp_id = {comp_id}.")
 
+    cursor.close()
+    return comp_id
+
+    # Inserts missing judges/couples
 def insert_missing_entries(connection, missing_judges, missing_couples):
     cursor = connection.cursor()
     
@@ -321,8 +108,8 @@ def insert_missing_entries(connection, missing_judges, missing_couples):
     connection.commit()
     cursor.close()
     
+    # Identify missing styles and enter new IDs
 def insert_missing_style(connection, style_name):
-    """Insert a missing style into the database and return its ID."""
     cursor = connection.cursor()
     cursor.execute("INSERT INTO style (name) VALUES (%s)", (style_name,))
     connection.commit()
@@ -330,35 +117,191 @@ def insert_missing_style(connection, style_name):
     cursor.close()
     print(f"Added missing style: '{style_name}' with ID {style_id}")
     return style_id
-    
+
 # ----------------------------------------------------------------------------------
-#                        Exporting Data to MySQL Database
+#                        User Entered Data, Data Collection
 # ----------------------------------------------------------------------------------
 
+    # Scrapes the main competition URL to gather all event links
+def get_event_links():
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless")
+    
+    # Using pre-installed ChromeDriver path here for faster execution
+    driver = webdriver.Chrome(options=options)
+
+    driver.get(MAIN_COMPETITION_URL)
+
+    # Collect links dynamically using the extracted CID
+    event_links = [
+        element.get_attribute("href")
+        for element in driver.find_elements(By.CSS_SELECTOR, f"a[href*='results.php?cid={CID}&eid=']")
+    ]
+    print(f"Found {len(event_links)} event links.")
+    
+    driver.quit()
+    return event_links
+
+    # Processes each event link found on the main competition page
+def process_all_events(connection):
+    # Get or create the competition ID
+    comp_id = get_or_create_competition_id(connection, COMPETITION_NAME)
+
+    event_links = get_event_links()
+    if not event_links:
+        print("No event links found.")
+        return
+
+    for event_url in event_links:
+        print(f"Processing event: {event_url}")
+        process_data(connection, event_url, comp_id)
+    print("Completed processing all events.")
+
+    # Main function for scraping data from URL
+def process_data(connection, url, comp_id):
+    output_filename = config.OUTPUT_FILE
+    style_name = scrape_table_to_excel(url, output_filename)
+    if not style_name:
+        print(f"Failed to scrape data from the webpage: {url}")
+        return
+
+    # Load and filter Excel data directly
+    df = pd.read_excel(output_filename).filter(regex="^(?!Number)")
+    print("Excel data loaded and filtered successfully.")
+    print("Columns found in the data:", df.columns)  # Debugging line to check column names
+
+    # Determine the correct column name for the competitors
+    competitor_column = None
+    if 'Couple' in df.columns:
+        competitor_column = 'Couple'
+    elif 'Dancer' in df.columns:
+        competitor_column = 'Dancer'
+    else:
+        print("Error: Neither 'Couple' nor 'Entrant' column found in the data. Available columns:", df.columns)
+        return  # Exit if neither 'Couple' nor 'Entrant' column is found
+
+    # Proceed with processing if the competitor column is found
+    mappings = fetch_data_mappings(connection)
+    style_id = mappings['styles'].get(style_name)
+    if style_id is None:
+        style_id = insert_missing_style(connection, style_name)
+        mappings['styles'][style_name] = style_id  # Update mappings
+    
+    print(f"Using comp_id = {comp_id} for all entries.")
+    judge_id_map, people_id_map = mappings['judges'], mappings['people']
+
+    # Map judge ids to judges
+    judge_ids = []
+    missing_judges = []
+    for judge_name in df.columns[2:]:
+        judge_id = judge_id_map.get(judge_name)
+        if judge_id is None:
+            missing_judges.append(judge_name)
+        judge_ids.append(judge_id)
+
+    # Map couples id to couples, and score, and judge
+    values_list = []
+    missing_couples = []
+    for _, row in df.iterrows():
+        couple_name = row[competitor_column]  # Use the identified column for competitor name
+        people_id = people_id_map.get(couple_name)
+        if people_id is None:
+            missing_couples.append(couple_name)
+            continue
+
+        scores = row[2:].tolist()
+        for score, judge_id in zip(scores, judge_ids):
+            if pd.notna(score) and isinstance(score, (int, float)):
+                values_list.append((int(score), people_id, judge_id, style_id, comp_id))
+
+    # Insert missing entries
+    if missing_judges or missing_couples:
+        print("Adding missing entries to database...")
+        insert_missing_entries(connection, missing_judges, missing_couples)
+        print("Missing entries added successfully.")
+
+        # Refresh mappings after insertion
+        mappings = fetch_data_mappings(connection)
+        judge_id_map, people_id_map = mappings['judges'], mappings['people']
+
+        # Update missing couples' people_ids
+        for couple_name in missing_couples:
+            people_id = people_id_map.get(couple_name)
+            for _, row in df.iterrows():
+                if row[competitor_column] == couple_name:
+                    scores = row[2:].tolist()
+                    for score, judge_id in zip(scores, judge_ids):
+                        if pd.notna(score) and isinstance(score, (int, float)):
+                            values_list.append((int(score), people_id, judge_id, style_id, comp_id))
+
+    # Insert scores
+    if values_list:
+        insert_scores(connection, values_list)
+    
+    print("Data entry completed for event.")
+
+    # Scrapes table data from the event URL and saves it to an Excel file
+def scrape_table_to_excel(url, output_filename=config.OUTPUT_FILE):
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless")
+    driver = webdriver.Chrome(options=options)
+    driver.get(url)
+
+    try:
+        header_element = driver.find_element(By.CSS_SELECTOR, "h1")
+        # Extract and format style name from header element
+        style_name = re.sub(
+            r"\b(Amateur|Collegiate|Two-Step|Country)\b", # Remove unnecessary information (Amateur Collegiate is repeated too often)
+            lambda match: {
+                "Country": "Country Western", # Replacing specific terms for standardization
+                "Two-Step": "Two Step"
+            }.get(match.group(0), ""),
+            header_element.text.replace("Results for", "")
+        )
+
+        # Remove all extra spaces within the string
+        style_name = re.sub(r'\s+', ' ', style_name).strip()
+
+        print(style_name)
+    except Exception as e:
+        print("Could not find header:", e)
+        driver.quit()
+        return None
+
+    try:
+        table = driver.find_element(By.XPATH, "//div[@id='results']//table")
+        headers = [header.text for header in table.find_elements(By.TAG_NAME, "th")]
+        rows = table.find_elements(By.TAG_NAME, "tr")
+        data = [[cell.text for cell in row.find_elements(By.TAG_NAME, "td")] for row in rows]
+        df = pd.DataFrame(data, columns=headers).drop(columns=['Style'], errors='ignore')
+        df.to_excel(output_filename, index=False)
+        print(f"Data saved to {output_filename}")
+    except Exception as e:
+        print("No table found:", e)
+        driver.quit()
+        return None
+
+    driver.quit()
+    return style_name
+
+# ----------------------------------------------------------------------------------
+#                           Optimized Database Insertion
+# ----------------------------------------------------------------------------------
+
+    # Inserts non-duplicate scores in bulk
 def insert_scores(connection, values_list):
     cursor = connection.cursor()
-    try:
-        non_duplicate_values = []
-        for entry in values_list:
-            score, people_id, judge_id, style_id, comp_id = entry
-            if not check_for_duplicates(connection, score, people_id, judge_id, style_id, comp_id):
-                non_duplicate_values.append(entry)
-            else:
-                print(f"Duplicate entry found, skipping: (score={score}, people_id={people_id}, judge_id={judge_id}, style_id={style_id}, comp_id={comp_id})")
-        
-        if non_duplicate_values:
-            cursor.executemany(
-                "INSERT INTO scores (score, people_id, judge_id, style_id, comp_id) VALUES (%s, %s, %s, %s, %s)",
-                non_duplicate_values
-            )
-            connection.commit()
-            print("Scores inserted successfully.")
-    except Error as e:
-        connection.rollback()
-        print(f"Error inserting scores: {e}")
-    finally:
-        cursor.close()
-        
+    cursor.executemany(
+        """
+        INSERT IGNORE INTO scores (score, people_id, judge_id, style_id, comp_id)
+        VALUES (%s, %s, %s, %s, %s)
+        """,
+        values_list
+    )
+    connection.commit()
+    print("Scores inserted successfully.")
+    cursor.close()
+
 # ===================================================================================
 
 def main():
@@ -366,13 +309,9 @@ def main():
     if connection is None:
         print("Failed to connect to the database.")
         return
-    
-    # Replace this with the main competition URL
-    main_competition_url = "https://ballroomcompexpress.com/results.php?cid=120"
-    competition_name = "Competition Name"  # Replace with the actual competition name
 
     # Process all events for the given main competition URL
-    process_all_events(connection, main_competition_url, competition_name)
+    process_all_events(connection)
 
 if __name__ == "__main__":
     main()
